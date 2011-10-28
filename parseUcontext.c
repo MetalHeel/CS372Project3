@@ -18,7 +18,6 @@ int main(int argc, char **argv)
   int err;
   int random = 0;
 
-
   printf("WORDSIZE %d\n", __WORDSIZE);
   assert(__WORDSIZE == 32); // Do this project on a 32-bit x86 linux machine
   printf("NGREG %d\n", NGREG);
@@ -70,7 +69,6 @@ int main(int argc, char **argv)
    * the stack in a context when you manipulate a context to create a new thread.
    */
   printf("The memory address of the local variable err is 0x%x\n", (unsigned int)mycontext.uc_mcontext.gregs[REG_EBP] - 12);
-  printf("probe address: %x\n", (unsigned int)&probeUCStack);
   printf("random address: %x\n", (unsigned int)&random);
   printf("The memory address of the argument argc is 0x%x\n", (unsigned int)mycontext.uc_mcontext.gregs[REG_EBP] + 8);
   printf("The value of ucontext_t.uc_stack is 0x%x\n", (unsigned int)mycontext.uc_stack.ss_sp);
@@ -79,9 +77,9 @@ int main(int argc, char **argv)
   printf("The stack pointer stored as another one of the `registers` (UESP) in uc_mcontext is 0x%x\n", (unsigned int)mycontext.uc_mcontext.gregs[REG_UESP]);
 
 
-  printf("The number of bytes pushed onto the stack between argc and err was 0x%x\n", (unsigned int)0);
+  printf("The number of bytes pushed onto the stack between argc and err was 0x%x\n", (unsigned int)(&argc - &err));
   /* Which is the right one to use? */
-  printf("The number of bytes pushed onto the stack between err and when the stack was saved to mycontext was 0x%x\n", (unsigned int)(-1));
+  printf("The number of bytes pushed onto the stack between err and when the stack was saved to mycontext was 0x%x\n", (unsigned int)(&mycontext.uc_stack.ss_sp - &err));
 
 
   return 0;  
