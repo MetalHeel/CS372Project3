@@ -2,7 +2,8 @@
 #define _ULT_H_
 #include <ucontext.h>
 
-#include "list.c"
+#include "list.h"
+
 
 typedef int Tid;
 typedef int Status;
@@ -10,8 +11,8 @@ typedef int Status;
 #define ULT_MAX_THREADS 1024
 #define ULT_MIN_STACK 32768
 
-#define RUNNING -1
-#define READY -2
+#define RUNNING -8
+#define READY -9
 
 
 
@@ -22,15 +23,6 @@ typedef struct ThrdCtlBlk{
   ucontext_t context;
 } ThrdCtlBlk;
 
-typedef struct ListElement
-{
-  List_Links links;
-  ThrdCtlBlk theTCB;
-} ListElement;
-
-
-List_Links list;
-#define initList() { List_Init(&list); }
 
 
 /*
