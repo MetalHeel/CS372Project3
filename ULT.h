@@ -2,15 +2,35 @@
 #define _ULT_H_
 #include <ucontext.h>
 
+#include "list.c"
+
 typedef int Tid;
+typedef int Status;
+
 #define ULT_MAX_THREADS 1024
 #define ULT_MIN_STACK 32768
+
+#define RUNNING -1
+#define READY -2
 
 
 
 typedef struct ThrdCtlBlk{
-  /* ... Fill this in ... */
+  Tid tid;
+  Status status;
+  stack_t stack;
+  ucontext_t context;
 } ThrdCtlBlk;
+
+typedef struct ListElement
+{
+  List_Links links;
+  ThrdCtlBlk theTCB;
+} ListElement;
+
+
+List_Links list;
+#define initList() { List_Init(&list); }
 
 
 /*
@@ -28,13 +48,17 @@ static const Tid ULT_NOMORE = -5;
 static const Tid ULT_NOMEMORY = -6;
 static const Tid ULT_FAILED = -7;
 
+
 static inline int ULT_isOKRet(Tid ret){
   return (ret >= 0 ? 1 : 0);
 }
 
+
 Tid ULT_CreateThread(void (*fn)(void *), void *parg);
 Tid ULT_Yield(Tid tid);
 Tid ULT_DestroyThread(Tid tid);
+
+void stub(void (*root)(void *), void *arg);
 
 
  
