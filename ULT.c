@@ -26,6 +26,21 @@ int search(int i, List_Links *node)
     return search(i, node->nextPtr);
 }
 
+int get_available_tid()
+{
+  if(numThreads == 1024)
+    return -1;
+  else
+  {
+    int x;
+    for(x = 0; x < 1023; x++)
+      if(search(x, List_First(&list)) < 0)
+        return x;
+  }
+
+  return -1;
+}
+
 Tid ULT_CreateThread(void (*fn)(void *), void *parg)
 {
   if(numThreads == -1)
@@ -46,8 +61,12 @@ Tid ULT_Yield(Tid wantTid)
     numThreads++;
   }
 
+  if((wantTid < -2) || (wantTid > 1023))
+    return ULT_INVALID;
+
   ucontext_t uc;
   ThrdCtlBlk tcb;
+  tcb.tid = -1;
   List_Links l;
   List_InitElement(&l);
   List_Links nextOne;
@@ -57,25 +76,30 @@ Tid ULT_Yield(Tid wantTid)
   {
     if(List_IsEmpty(&list))
       tcb.tid = 0;
-  }
-  else if(wantTid == ULT_ANY)
-  {
-    if(List_IsEmpty(&list))
-      return ULT_NONE;
-  }
-  else
-  {
-    if(List_IsEmpty(&list))
-      return ULT_NONE;
     else
+      tcb.tid = get_available_tid();
+  }
+  else if(List_IsEmpty(&list))
+  {
+    if(wantTid == 0)
+    {
+      tcb.tid = 0;
+      wantTid = ULT_SELF;
+    }
+    else
+      return ULT_NONE;
+  } 
+  else		// Either ULT_ANY or a specific tid.
+  {
+    if(wantTid >= 0)	// Specific tid.
+    {
+      nextOne = *List_First(&list);
       if(search(wantTid, &nextOne) < 0)
         return ULT_INVALID;
-  }
+    }
 
-  if(search(0, List_First(&list)) >= 0)
-    tcb.tid = List_Last(&list)->theTCB->tid + 1;  // DO CIRCULAR TIDs!
-  else
-    tcb.tid = 0;
+    tcb.tid = get_available_tid();
+  }
 
   tcb.status = READY;
   tcb.stack = uc.uc_stack;
