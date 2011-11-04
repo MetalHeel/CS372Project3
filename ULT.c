@@ -1,13 +1,13 @@
 #include <assert.h>
-#include <ucontext.h>
 #include <stdlib.h>
-
-#include "list.c"
+#include <stdio.h>
 
 /* We want the extra information from these definitions */
 #ifndef __USE_GNU
 #define __USE_GNU
 #endif /* __USE_GNU */
+
+#include "list.c"
 
 
 static List_Links list;
@@ -41,6 +41,7 @@ int get_available_tid()
   return -1;
 }
 
+
 Tid ULT_CreateThread(void (*fn)(void *), void *parg)
 {
   if(numThreads == -1)
@@ -48,10 +49,53 @@ Tid ULT_CreateThread(void (*fn)(void *), void *parg)
     List_Init(&list);
     numThreads++;
   }
-  assert(1); /* TBD */
+
+  if(numThreads == 1024)
+    return ULT_NOMORE;
+
+  ucontext_t uc;
+  ThrdCtlBlk tcb;
+  
+  if(List_IsEmpty(&list))
+    tcb.tid = 1;
+  else
+    tcb.tid = get_available_tid();
+
+  tcb.status = READY;
+  List_Links l;
+  List_InitElement(&l);
+
+  getcontext(&uc);
+  // Set up stack.
+  int* stack = (int*) malloc(ULT_MIN_STACK * sizeof(int));
+  if(stack == NULL)
+    return ULT_NOMEMORY;
+  uc.uc_stack.ss_sp = stack + (ULT_MIN_STACK * sizeof(int));
+  uc.uc_stack.ss_size = ULT_MIN_STACK;
+
+  // Set up root.
+  uc.uc_mcontext.gregs[REG_EIP] = (unsigned int)&stub;
+  uc.uc_stack.ss_sp = parg;
+  uc.uc_stack.ss_sp = uc.uc_stack.ss_sp - 4;
+  uc.uc_stack.ss_sp = fn;
+  uc.uc_stack.ss_sp = uc.uc_stack.ss_sp - 4;
+  uc.uc_stack.ss_sp = 0x0;
+  uc.uc_stack.ss_sp = uc.uc_stack.ss_sp + 8;
+
+  // Set up ESP.
+  uc.uc_stack.ss_sp = uc.uc_stack.ss_sp - 8;
+  uc.uc_mcontext.gregs[REG_ESP] = (unsigned int)&uc.uc_stack.ss_sp;
+  uc.uc_stack.ss_sp = uc.uc_stack.ss_sp + 8;
+
+  tcb.stack = uc.uc_stack;
+  tcb.context = uc;
+  l.theTCB = &tcb;
+  List_Insert(&l, LIST_ATREAR(&list));
   numThreads++;
-  return ULT_FAILED;
+
+  return tcb.tid;
 }
+
 
 Tid ULT_Yield(Tid wantTid)
 {
@@ -66,7 +110,6 @@ Tid ULT_Yield(Tid wantTid)
 
   ucontext_t uc;
   ThrdCtlBlk tcb;
-  tcb.tid = -1;
   List_Links l;
   List_InitElement(&l);
   List_Links nextOne;
@@ -86,10 +129,12 @@ Tid ULT_Yield(Tid wantTid)
       tcb.tid = 0;
       wantTid = ULT_SELF;
     }
-    else
+    else if(wantTid == ULT_ANY)
       return ULT_NONE;
+    else
+      return ULT_INVALID;
   } 
-  else		// Either ULT_ANY or a specific tid.
+  else
   {
     if(wantTid >= 0)	// Specific tid.
     {
@@ -100,7 +145,6 @@ Tid ULT_Yield(Tid wantTid)
 
     tcb.tid = get_available_tid();
   }
-
   tcb.status = READY;
   tcb.stack = uc.uc_stack;
   tcb.context = uc;
@@ -148,6 +192,7 @@ Tid ULT_Yield(Tid wantTid)
     return l.theTCB->tid;
   }
 }
+
 
 Tid ULT_DestroyThread(Tid tid)
 {
