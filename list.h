@@ -20,7 +20,6 @@
 
 #include <stdio.h>
 #include "cfuncproto.h"
-#include "ULT.h"
 
 #define panic2(x) { \
     fprintf (stderr, "panic!\n"); \
@@ -91,7 +90,6 @@ void Test();
 typedef struct List_Links {
     struct List_Links *prevPtr;
     struct List_Links *nextPtr;
-    struct ThrdCtlBlk *theTCB;
 } List_Links;
 
 /*

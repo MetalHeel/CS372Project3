@@ -7,8 +7,22 @@
 #define __USE_GNU
 #endif
 #include <ucontext.h>
+#include "list.c"
+
+typedef int Tid;
+typedef int Status;
+
+#define RUNNING -8
+#define READY -9
 
 #define SOL 99
+
+typedef struct ThrdCtlBlk{
+  List_Links links;
+  Tid tid;
+  Status status;
+  ucontext_t context;
+} ThrdCtlBlk;
 
 unsigned int probeUCStack(char *string);
 
@@ -17,6 +31,18 @@ int main(int argc, char **argv)
   ucontext_t mycontext;
   int err;
   int random = 0;
+
+  List_Links list;
+  List_InitElement(&list);
+  List_Init(&list);
+  ThrdCtlBlk tcb;
+  List_InitElement(&tcb.links);
+  tcb.tid = 4;
+  tcb.status = RUNNING;
+  List_Insert(&tcb.links, &list);
+  printf("works: %p\n", List_First(&list) + (3 >> 1));
+  printf("tid: %p\n", &tcb.status);
+  
 
   printf("WORDSIZE %d\n", __WORDSIZE);
   assert(__WORDSIZE == 32); // Do this project on a 32-bit x86 linux machine

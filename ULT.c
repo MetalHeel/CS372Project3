@@ -7,10 +7,10 @@
 #define __USE_GNU
 #endif /* __USE_GNU */
 
-#include "list.c"
+#include "ULT.h"
 
 
-static List_Links list;
+List_Links list;
 
 static int yield = 1;
 static int numThreads = -1;
@@ -22,7 +22,7 @@ int search(int i, List_Links *node)
 
   for(x = 0; x < numThreads; x++)
   {
-    if(node->theTCB->tid == i)
+    if(*((int *)(node + 1)) == i)
       return i;
     node = node->nextPtr;
   }
@@ -55,6 +55,7 @@ Tid ULT_CreateThread(void (*fn)(void *), void *parg)
 {
   if(numThreads == -1)
   {
+    List_InitElement(&list);
     List_Init(&list);
     numThreads++;
   }
@@ -62,8 +63,30 @@ Tid ULT_CreateThread(void (*fn)(void *), void *parg)
   if(numThreads == 1024)
     return ULT_NOMORE;
 
-  List_Links l;
-  List_InitElement(&l);
+  ucontext_t uc;
+  getcontext(&uc);
+
+  // Set up stack.
+  void* stack = malloc(ULT_MIN_STACK * 4);
+  if(stack == NULL)
+    return ULT_NOMEMORY;
+  uc.uc_stack.ss_size = ULT_MIN_STACK;
+  uc.uc_stack.ss_sp = stack + (ULT_MIN_STACK * 4 - 4);
+
+  // Set up root.
+  uc.uc_mcontext.gregs[REG_EIP] = (unsigned int)&stub;
+  uc.uc_stack.ss_sp = parg;
+  uc.uc_stack.ss_sp = uc.uc_stack.ss_sp - 4;
+  uc.uc_stack.ss_sp = fn;
+  uc.uc_stack.ss_sp = uc.uc_stack.ss_sp - 4;
+  uc.uc_stack.ss_sp = 0x0;
+
+  // Set up ESP.
+  uc.uc_mcontext.gregs[REG_ESP] = (unsigned int)&uc.uc_stack.ss_sp;
+  uc.uc_stack.ss_sp = uc.uc_stack.ss_sp + 8;
+
+  ThrdCtlBlk tcb;
+  List_InitElement(&tcb.links);
   int newtid;
 
   if(List_IsEmpty(&list))
@@ -71,42 +94,18 @@ Tid ULT_CreateThread(void (*fn)(void *), void *parg)
   else
     newtid = get_available_tid();
 
-  l.theTCB->tid = newtid;
-  l.theTCB->status = READY;
-
-  getcontext(&(l.theTCB->context));
-
-  // Set up stack.
-  void* stack = malloc(ULT_MIN_STACK * 4);
-  if(stack == NULL)
-    return ULT_NOMEMORY;
-
-  printf("here: %d\n", (unsigned int)l.theTCB->context.uc_stack.ss_sp);
-  l.theTCB->context.uc_stack.ss_size = ULT_MIN_STACK;
-  l.theTCB->context.uc_stack.ss_sp = stack + (ULT_MIN_STACK * 4 - 4);
-  printf("broken\n");
-
-  // Set up root.
-  l.theTCB->context.uc_mcontext.gregs[REG_EIP] = (unsigned int)&stub;
-  l.theTCB->context.uc_stack.ss_sp = parg;
-  l.theTCB->context.uc_stack.ss_sp = l.theTCB->context.uc_stack.ss_sp - 4;
-  l.theTCB->context.uc_stack.ss_sp = fn;
-  l.theTCB->context.uc_stack.ss_sp = l.theTCB->context.uc_stack.ss_sp - 4;
-  l.theTCB->context.uc_stack.ss_sp = 0x0;
-  l.theTCB->context.uc_stack.ss_sp = l.theTCB->context.uc_stack.ss_sp + 8;
-
-  // Set up ESP.
-  l.theTCB->context.uc_stack.ss_sp = l.theTCB->context.uc_stack.ss_sp - 8;
-  l.theTCB->context.uc_mcontext.gregs[REG_ESP] = (unsigned int)&l.theTCB->context.uc_stack.ss_sp;
-  l.theTCB->context.uc_stack.ss_sp = l.theTCB->context.uc_stack.ss_sp + 8;
+  tcb.tid = newtid;
+  tcb.status = READY;
+  tcb.context = uc;
 
   if(numThreads == 0)
-    List_Insert(&l, &list);
+    List_Insert(&tcb.links, &list);
   else
-    List_Insert(&l, LIST_ATREAR(&list));
+    List_Insert(&tcb.links, LIST_ATREAR(&list));
+
   numThreads++;
 
-  return l.theTCB->tid;
+  return newtid;
 }
 
 
@@ -114,6 +113,7 @@ Tid ULT_Yield(Tid wantTid)
 {
   if(numThreads == -1)
   {
+    List_InitElement(&list);
     List_Init(&list);
     numThreads++;
   }
@@ -121,10 +121,10 @@ Tid ULT_Yield(Tid wantTid)
   if((wantTid < -2) || (wantTid > 1023))
     return ULT_INVALID;
 
-  List_Links l;
-  List_InitElement(&l);
-  List_Links nextOne;
-  List_InitElement(&nextOne);
+  ThrdCtlBlk insert;
+  ThrdCtlBlk next;
+  List_InitElement(&insert.links);
+  List_InitElement(&next.links);
   int newtid;
 
   if(wantTid == ULT_SELF)
@@ -150,40 +150,39 @@ Tid ULT_Yield(Tid wantTid)
   {
     if(wantTid >= 0)	// Specific tid.
     {
-      nextOne = *List_First(&list);
-      if(search(wantTid, &nextOne) < 0)
+      next.links = *List_First(&list);
+      if(search(wantTid, &next.links) < 0)
         return ULT_INVALID;
     }
     
     newtid = get_available_tid();
   }
 
-  l.theTCB->tid = newtid;
-
-  getcontext(&l.theTCB->context);       // Caller resumes here.
-  l.theTCB->status = READY;
+  insert.tid = newtid;
+  getcontext(&insert.context);       // Caller resumes here.
+  insert.status = READY;
 
   if(yield)
   {
     yield = 0;
     if(wantTid == ULT_SELF)
-      List_Insert(&l, LIST_ATFRONT(&list));
+      List_Insert(&insert.links, LIST_ATFRONT(&list));
     else if(wantTid == ULT_ANY)
-      List_Insert(&l, LIST_ATREAR(&list));
+      List_Insert(&insert.links, LIST_ATREAR(&list));
     else
     {
-      List_Insert(&l, LIST_ATREAR(&list));
-      List_Remove(&nextOne);
+      List_Insert(&insert.links, LIST_ATREAR(&list));
+      List_Remove(&next.links);
       setcontext(&nextOne.theTCB->context);
       return nextOne.theTCB->tid;
     }
 
     // Set next context.
-    nextOne = *List_First(&list);
+    // nextOne = *List_First(&list);
+    ucontext_t newcontext = List_First(&list)->theTCB->context;
+    Tid returnTid = List_First(&list)->theTCB->tid;
     List_Remove(List_First(&list));
-    nextOne.theTCB->status = RUNNING;
-    Tid returnTid = nextOne.theTCB->tid;
-    setcontext(&nextOne.theTCB->context);
+    setcontext(&newcontext);
 
     assert(0 <= returnTid);
 
@@ -192,7 +191,7 @@ Tid ULT_Yield(Tid wantTid)
   else
   {
     yield = 1;
-    return l.theTCB->tid;
+    return yl.theTCB->tid;
   }
 }
 

@@ -17,6 +17,7 @@ typedef int Status;
 
 
 typedef struct ThrdCtlBlk{
+  List_Links links;
   Tid tid;
   Status status;
   ucontext_t context;
