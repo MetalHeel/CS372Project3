@@ -55,6 +55,8 @@ void basicThreadTests()
   ret = ULT_CreateThread((void (*)(void *))hello, "World");
   assert(ULT_isOKRet(ret));
   ret2 = ULT_Yield(ret);
+  printf("ret: %d\n", ret);
+  printf("ret2: %d\n", ret2);
   assert(ret2 == ret);
 
   /*

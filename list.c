@@ -83,6 +83,7 @@ List_Insert(itemPtr, destPtr)
 	panic2(("List_Insert: trying to insert something after itself.\n"));
 	return;
     }
+    
     itemPtr->nextPtr = destPtr->nextPtr;
     itemPtr->prevPtr = destPtr;
     destPtr->nextPtr->prevPtr = itemPtr;

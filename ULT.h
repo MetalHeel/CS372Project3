@@ -19,7 +19,6 @@ typedef int Status;
 typedef struct ThrdCtlBlk{
   Tid tid;
   Status status;
-  stack_t stack;
   ucontext_t context;
 } ThrdCtlBlk;
 
