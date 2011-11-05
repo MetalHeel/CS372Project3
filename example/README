@@ -1,20 +1,12 @@
-Name and UTEID of both team members
+All I did was keep the exact same code and I found some code online and
+replaced only the following:
 
+	ULT.c
+	ULT.h
+	parseUcontext.c
 
-Number of slip days used (this project)/(total)
+Then ran ./doTest and it went through the whole thing. Everything runs
+correctly.
 
-
-Describe your high level design here.
-
-
-Describe your testing strategy here
-(and explain how to run your tests and interpret your results)
-
-
-
-Document your testing results here
-
-
-
-
-
+I don't want to copy this by any means, but to just hopefully use it for
+some ideas since we're stuck so freakin hard.
